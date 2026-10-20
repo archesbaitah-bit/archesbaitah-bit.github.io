@@ -300,7 +300,7 @@ $("refresh").addEventListener("click", load);
 $("sendCode").addEventListener("click", async () => {
   const email = $("email").value.trim();
   $("signinMsg").textContent = "Sending...";
-  const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+  const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
   if (error) { $("signinMsg").innerHTML = `<span class="err">${esc(error.message)}</span>`; return; }
   $("stepEmail").classList.add("hidden"); $("stepCode").classList.remove("hidden");
   $("signinMsg").innerHTML = `<span class="ok">Code sent to ${esc(email)}. It can take a minute.</span>`;
