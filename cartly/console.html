@@ -59,6 +59,16 @@
   .cfg p { font-size:12.5px; color:#5a6f60; margin-bottom:8px; line-height:1.5; }
   .msg { font-size:13px; margin-top:8px; }
   .ok { color:#2BB51C; } .err { color:#c2410c; }
+  .fld { margin-bottom:12px; }
+  .fld label { display:block; font-size:12px; font-weight:700; letter-spacing:.4px; color:#5a6f60; margin-bottom:5px; }
+  .fld input[type=text], .fld input[type=number], .fld input[type=date], .fld select, .fld textarea {
+    width:100%; padding:10px 12px; border:1.5px solid #cfd8cf; border-radius:10px; font-size:14px; margin:0; min-height:0; }
+  .fld textarea { font-family:inherit; line-height:1.5; }
+  .postbox { border:1.5px solid #e3e7e3; border-radius:12px; padding:16px; margin-bottom:14px; }
+  .posthead { font-size:12px; font-weight:800; letter-spacing:1.5px; color:#FD5500; margin-bottom:12px; }
+  .statsrow { display:grid; grid-template-columns:1fr 2fr 1fr 2fr 1fr 2fr; gap:8px; }
+  .claims { font-size:13px; line-height:1.7; color:#24382f; background:#f8f6f0; border-radius:10px; padding:10px 14px; margin-bottom:12px; }
+  .preview video { width:100%; border-radius:12px; background:#000; }
   .hidden { display:none; }
 </style></head><body>
 <header>
@@ -167,7 +177,7 @@ function colHTML(status) {
   return list.map((it) => `<div class="item" data-id="${it.id}">
     <div class="chip">${esc(labelFor(it))}</div>
     <div class="h">${esc(headline(it))}</div>
-    <div class="d">${new Date(it.created_at).toLocaleDateString("en-CA")} · tap to review</div></div>`).join("");
+    <div class="d">${new Date(it.created_at).toLocaleDateString("en-CA")} · tap to review${(it.payload||{}).preview_url ? " · &#9654; video" : ""}</div></div>`).join("");
 }
 function render() {
   for (const [status, colId, nId] of [["draft", "colDraft", "nDraft"], ["approved", "colApproved", "nApproved"], ["published", "colPublished", "nPublished"], ["rejected", "colRejected", "nRejected"]]) {
@@ -232,14 +242,20 @@ function actionsHTML(it) {
   if (it.status === "rejected") b.push(`<button class="btn grey" data-decide="draft">Restore to drafts</button>`);
   return b.join("");
 }
+function previewHTML(it) {
+  const p = it.payload || {};
+  if (p.preview_url) return `<video controls playsinline preload="metadata" src="${esc(p.preview_url)}"></video>
+    <div class="note">Preview copy at reduced quality. The full quality master is what publishes.</div>`;
+  if (it.asset_urls && it.asset_urls[0]) return `<img src="${esc(it.asset_urls[0])}" alt="Published asset">`;
+  return staticPreview(it);
+}
 function openItem(id) {
   current = items.find((i) => i.id === id);
   if (!current) return;
   $("mChip").textContent = labelFor(current).toUpperCase() + " · " + current.status.toUpperCase();
   $("mTitle").textContent = headline(current);
   $("mMeta").textContent = `Created ${new Date(current.created_at).toLocaleString("en-CA")} · template ${current.template || ""} · id ${current.id.slice(0, 8)}`;
-  $("mPreview").innerHTML = (current.asset_urls && current.asset_urls[0])
-    ? `<img src="${esc(current.asset_urls[0])}" alt="Published asset">` : staticPreview(current);
+  $("mPreview").innerHTML = previewHTML(current);
   $("mCaption").textContent = current.caption || "";
   $("mDetail").innerHTML = detailHTML(current);
   $("mActions").innerHTML = actionsHTML(current);
@@ -260,32 +276,134 @@ async function decide(decision) {
 $("mClose").addEventListener("click", () => { $("modalBg").style.display = "none"; });
 $("modalBg").addEventListener("click", (e) => { if (e.target === $("modalBg")) $("modalBg").style.display = "none"; });
 
-const CFG_HELP = {
-  deck_campaign_launch_v1: "The launch campaign copy deck: every post's kicker, title, points, footer and caption, plus the explainer Reel's scenes. Edits here change what the generator produces next time it runs. JSON array of posts; the last entry may carry the reel scenes.",
-  deck_education_v1: "The education series copy deck: titles, points and captions for the evergreen posts. Same rule: edits apply at the next generation run.",
-  campaign_launch_v1: "Campaign config and the verified claims register for launch_v1 (window, allowed claims, formats).",
-  thresholds: "Generation gates: minimum spread and dollars, freshness window in days. The generator refuses anything outside these.",
-  caps: "Publishing caps, for example posts per day.",
-  reel_voice_female: "Kokoro voice id for the female reel slot (a JSON string).",
-  reel_voice_male: "Kokoro voice id for the male reel slot (a JSON string).",
-  reel_voice_next: "Which voice slot the next price Reel uses: \"female\" or \"male\" (a JSON string).",
-};
+function fld(label, inner) {
+  return `<div class="fld"><label>${esc(label)}</label>${inner}</div>`;
+}
+function txt(id, val) { return `<input type="text" id="${id}" value="${esc(val ?? "")}">`; }
+function num(id, val, step) { return `<input type="number" id="${id}" value="${esc(val ?? "")}" step="${step || "1"}">`; }
+function area(id, val, rows) { return `<textarea id="${id}" rows="${rows || 3}">${esc(val ?? "")}</textarea>`; }
+function lines(id, arr) { return area(id, (arr || []).join("\n"), Math.max(3, (arr || []).length + 1)); }
+function splitLines(v) { return v.split("\n").map((s) => s.trim()).filter(Boolean); }
+function sel(id, val, opts) {
+  return `<select id="${id}">` + opts.map(([v, l]) => `<option value="${esc(v)}"${v === val ? " selected" : ""}>${esc(l)}</option>`).join("") + `</select>`;
+}
+const FEMALE_VOICES = [["af_sarah", "Sarah"], ["af_bella", "Bella"], ["af_nicole", "Nicole"]];
+const MALE_VOICES = [["am_puck", "Puck"], ["am_adam", "Adam"], ["am_michael", "Michael"]];
+let CFG = {};
+
 async function loadScripts() {
-  const { config, editable_keys } = await api({ action: "get_config" });
-  $("viewScripts").innerHTML = editable_keys.map((k) => `<div class="card cfg">
-    <h3>${esc(k)}</h3><p>${esc(CFG_HELP[k] || "Editable setting.")}</p>
-    <textarea id="cfg_${esc(k)}">${esc(JSON.stringify(config[k] ?? null, null, 2))}</textarea>
-    <div style="margin-top:10px"><button class="btn dark" data-save="${esc(k)}">Save changes</button>
-    <span class="msg" id="msg_${esc(k)}"></span></div></div>`).join("") +
-    `<p class="note">Generation runs from these decks and settings. Python builder code itself lives in the project repo and is edited there; everything copy-shaped lives here.</p>`;
-  document.querySelectorAll("[data-save]").forEach((el) => el.addEventListener("click", async () => {
-    const k = el.dataset.save, msg = $("msg_" + k);
-    let value;
-    try { value = JSON.parse($("cfg_" + k).value); }
-    catch { msg.innerHTML = `<span class="err">Not valid JSON yet. Fix the text and save again.</span>`; return; }
-    try { await api({ action: "set_config", key: k, value }); msg.innerHTML = `<span class="ok">Saved.</span>`; }
-    catch (e) { msg.innerHTML = `<span class="err">${esc(e.message)}</span>`; }
-  }));
+  const { config } = await api({ action: "get_config" });
+  CFG = config || {};
+  const camp = CFG.deck_campaign_launch_v1 || { posts: [], reel: { voice: "af_sarah", scenes: [], caption: "" } };
+  const edu = CFG.deck_education_v1 || [];
+  const th = CFG.thresholds || {};
+  const caps = CFG.caps || {};
+  const ci = CFG.campaign_launch_v1 || {};
+  const win = String(ci.window || "").split("/");
+
+  let h = "";
+  h += `<div class="card cfg"><h3>Launch campaign posts</h3>
+    <p>The posts in the launch series. Edit the words here and the next generation run uses your version. One point per line.</p>`;
+  (camp.posts || []).forEach((p, i) => {
+    h += `<div class="postbox"><div class="posthead">Post ${i + 1} · ${esc(p.slug)}</div>`;
+    h += fld("Small headline at the top", txt(`cp_${i}_kicker`, p.kicker));
+    h += fld("Title", txt(`cp_${i}_title`, p.title));
+    h += fld("Points, one per line", lines(`cp_${i}_points`, p.points));
+    if (p.stats) {
+      h += `<div class="fld"><label>Numbers strip</label><div class="statsrow">` +
+        p.stats.map((s, j) => `<input type="text" id="cp_${i}_sn${j}" value="${esc(s.n)}" placeholder="Number"><input type="text" id="cp_${i}_sl${j}" value="${esc(s.l)}" placeholder="Label">`).join("") +
+        `</div></div>`;
+    }
+    h += fld("Small print at the bottom", txt(`cp_${i}_footer`, p.footer));
+    h += fld("Instagram caption", area(`cp_${i}_caption`, p.caption, 4));
+    h += `</div>`;
+  });
+  h += `<div class="postbox"><div class="posthead">Explainer Reel</div>`;
+  h += fld("Voice", sel("cr_voice", camp.reel.voice, FEMALE_VOICES.concat(MALE_VOICES)));
+  (camp.reel.scenes || []).forEach((s, i) => {
+    h += fld(`Scene ${i + 1} · text on screen`, area(`cr_${i}_big`, s.big, 2));
+    h += fld(`Scene ${i + 1} · what the voice says`, area(`cr_${i}_say`, s.say, 2));
+  });
+  h += fld("Instagram caption", area("cr_caption", camp.reel.caption, 3));
+  h += `</div><button class="btn dark" id="saveCamp">Save campaign posts</button> <span class="msg" id="msgCamp"></span></div>`;
+
+  h += `<div class="card cfg"><h3>Education posts</h3>
+    <p>The evergreen "how Cartly works" series. One point per line. These posts never carry prices.</p>`;
+  edu.forEach((p, i) => {
+    h += `<div class="postbox"><div class="posthead">Post ${i + 1} · ${esc(p.slug)}</div>`;
+    h += fld("Title", txt(`ep_${i}_title`, p.title));
+    h += fld("Points, one per line", lines(`ep_${i}_points`, p.points));
+    h += fld("Instagram caption", area(`ep_${i}_caption`, p.caption, 4));
+    h += `</div>`;
+  });
+  h += `<button class="btn dark" id="saveEdu">Save education posts</button> <span class="msg" id="msgEdu"></span></div>`;
+
+  h += `<div class="card cfg"><h3>Generation rules</h3>
+    <p>What a price difference must clear before the generator will draft a post about it.</p>`;
+  h += fld("Minimum spread, percent", num("th_pct", th.min_spread_pct));
+  h += fld("Minimum spread, dollars", num("th_abs", th.min_spread_abs, "0.1"));
+  h += fld("Prices must be fresher than, days", num("th_fresh", th.freshness_days));
+  h += fld("Minimum offers per product", num("th_offers", th.min_offers));
+  h += `<button class="btn dark" id="saveTh">Save rules</button> <span class="msg" id="msgTh"></span></div>`;
+
+  h += `<div class="card cfg"><h3>Publishing and voices</h3>
+    <p>How much can publish in a day, and which voices the price Reels use. Voice changes apply to future Reels.</p>`;
+  h += fld("Posts per day, maximum", num("cap_day", caps.posts_per_day));
+  h += fld("Female voice", sel("v_f", CFG.reel_voice_female || "af_sarah", FEMALE_VOICES));
+  h += fld("Male voice", sel("v_m", CFG.reel_voice_male || "am_puck", MALE_VOICES));
+  h += fld("Next Reel uses", sel("v_next", CFG.reel_voice_next || "female", [["female", "The female voice"], ["male", "The male voice"]]));
+  h += `<button class="btn dark" id="saveMisc">Save publishing and voices</button> <span class="msg" id="msgMisc"></span></div>`;
+
+  h += `<div class="card cfg"><h3>Campaign window and verified claims</h3>
+    <p>The claims below were checked against the live app and catalogue before any copy was written. They are shown for reference; changing a claim means re-verifying it first, so they are not edited here.</p>`;
+  h += fld("Window starts", `<input type="date" id="ci_start" value="${esc(win[0] || "")}">`);
+  h += fld("Window ends", `<input type="date" id="ci_end" value="${esc(win[1] || "")}">`);
+  h += `<div class="claims">` + (ci.allowed_claims || []).map((c) => `<div>• ${esc(c)}</div>`).join("") + `</div>`;
+  h += `<button class="btn dark" id="saveWin">Save window</button> <span class="msg" id="msgWin"></span></div>`;
+
+  $("viewScripts").innerHTML = h;
+
+  const say = (id, ok, text) => { $(id).innerHTML = `<span class="${ok ? "ok" : "err"}">${esc(text)}</span>`; };
+  $("saveCamp").addEventListener("click", async () => {
+    const posts = (camp.posts || []).map((p, i) => {
+      const out = { slug: p.slug, kicker: $("cp_" + i + "_kicker").value, title: $("cp_" + i + "_title").value,
+        points: splitLines($("cp_" + i + "_points").value), stats: null,
+        footer: $("cp_" + i + "_footer").value, caption: $("cp_" + i + "_caption").value };
+      if (p.stats) out.stats = p.stats.map((s, j) => ({ n: $("cp_" + i + "_sn" + j).value, l: $("cp_" + i + "_sl" + j).value }));
+      return out;
+    });
+    const reel = { voice: $("cr_voice").value,
+      scenes: (camp.reel.scenes || []).map((s, i) => ({ big: $("cr_" + i + "_big").value, say: $("cr_" + i + "_say").value })),
+      caption: $("cr_caption").value };
+    try { await api({ action: "set_config", key: "deck_campaign_launch_v1", value: { posts, reel } }); say("msgCamp", true, "Saved. The next generation run uses this version."); }
+    catch (e) { say("msgCamp", false, e.message); }
+  });
+  $("saveEdu").addEventListener("click", async () => {
+    const posts = edu.map((p, i) => ({ slug: p.slug, title: $("ep_" + i + "_title").value,
+      points: splitLines($("ep_" + i + "_points").value), caption: $("ep_" + i + "_caption").value }));
+    try { await api({ action: "set_config", key: "deck_education_v1", value: posts }); say("msgEdu", true, "Saved. The next generation run uses this version."); }
+    catch (e) { say("msgEdu", false, e.message); }
+  });
+  $("saveTh").addEventListener("click", async () => {
+    const value = { min_spread_pct: parseFloat($("th_pct").value), min_spread_abs: parseFloat($("th_abs").value),
+      freshness_days: parseInt($("th_fresh").value, 10), min_offers: parseInt($("th_offers").value, 10) };
+    try { await api({ action: "set_config", key: "thresholds", value }); say("msgTh", true, "Saved."); }
+    catch (e) { say("msgTh", false, e.message); }
+  });
+  $("saveMisc").addEventListener("click", async () => {
+    try {
+      await api({ action: "set_config", key: "caps", value: { posts_per_day: parseInt($("cap_day").value, 10) } });
+      await api({ action: "set_config", key: "reel_voice_female", value: $("v_f").value });
+      await api({ action: "set_config", key: "reel_voice_male", value: $("v_m").value });
+      await api({ action: "set_config", key: "reel_voice_next", value: $("v_next").value });
+      say("msgMisc", true, "Saved.");
+    } catch (e) { say("msgMisc", false, e.message); }
+  });
+  $("saveWin").addEventListener("click", async () => {
+    const value = { ...ci, window: $("ci_start").value + "/" + $("ci_end").value };
+    try { await api({ action: "set_config", key: "campaign_launch_v1", value }); say("msgWin", true, "Saved."); }
+    catch (e) { say("msgWin", false, e.message); }
+  });
 }
 
 document.querySelectorAll(".tab[data-tab]").forEach((t) => t.addEventListener("click", () => {
