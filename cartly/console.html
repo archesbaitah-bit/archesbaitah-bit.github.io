@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cartly Content Console</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; font-family:-apple-system,'Segoe UI',Arial,sans-serif; }
+  body { background:#f4efe4; color:#10231b; min-height:100vh; }
+  header { background:#023723; color:#f4efe4; padding:18px 22px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  header .logo { background:#fff; border-radius:10px; padding:6px 12px; font-weight:800; color:#023723; font-size:20px; }
+  header .logo span { color:#FD5500; }
+  header h1 { font-size:19px; font-weight:700; }
+  header .sp { flex:1; }
+  header .who { font-size:13px; opacity:.85; }
+  button { cursor:pointer; border:none; border-radius:10px; font-weight:700; }
+  .btn { background:#FD5500; color:#fff; padding:10px 18px; font-size:14px; }
+  .btn.green { background:#2BB51C; }
+  .btn.ghost { background:transparent; color:#f4efe4; border:1.5px solid rgba(244,239,228,.5); padding:8px 14px; }
+  .btn.dark { background:#023723; color:#f4efe4; }
+  .btn.grey { background:#dde7de; color:#24382f; }
+  .btn.red { background:#c2410c; color:#fff; }
+  main { max-width:1280px; margin:0 auto; padding:22px; }
+  .card { background:#fff; border-radius:16px; padding:22px; box-shadow:0 2px 10px rgba(2,55,35,.08); }
+  .signin { max-width:430px; margin:60px auto; }
+  .signin h2 { color:#023723; font-size:24px; margin-bottom:8px; }
+  .signin p { color:#5a6f60; font-size:14px; line-height:1.5; margin-bottom:16px; }
+  input[type=email], input[type=text] { width:100%; padding:12px 14px; border:1.5px solid #cfd8cf; border-radius:10px; font-size:15px; margin-bottom:12px; }
+  .tabs { display:flex; gap:10px; margin-bottom:18px; flex-wrap:wrap; }
+  .tab { padding:10px 18px; border-radius:999px; background:#fff; color:#24382f; font-size:14px; box-shadow:0 1px 4px rgba(2,55,35,.08); }
+  .tab.on { background:#023723; color:#f4efe4; }
+  .board { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; align-items:start; }
+  @media (max-width:1000px){ .board{ grid-template-columns:repeat(2,1fr);} }
+  @media (max-width:560px){ .board{ grid-template-columns:1fr;} }
+  .col h3 { font-size:13px; letter-spacing:2px; color:#5a6f60; margin:4px 2px 10px; }
+  .col h3 b { color:#023723; }
+  .item { background:#fff; border-radius:14px; padding:14px; margin-bottom:10px; box-shadow:0 1px 5px rgba(2,55,35,.08); cursor:pointer; }
+  .item:hover { outline:2px solid #FD5500; }
+  .chip { display:inline-block; font-size:10px; font-weight:800; letter-spacing:1.5px; color:#FD5500; margin-bottom:6px; }
+  .item .h { font-size:14px; font-weight:700; line-height:1.35; color:#10231b; }
+  .item .d { font-size:12px; color:#6b7f75; margin-top:6px; }
+  .empty { font-size:13px; color:#8aa091; padding:8px 2px; }
+  .modal-bg { position:fixed; inset:0; background:rgba(2,35,23,.55); display:none; align-items:flex-start; justify-content:center; overflow:auto; padding:26px 12px; z-index:50; }
+  .modal { background:#fff; border-radius:18px; max-width:860px; width:100%; padding:24px; }
+  .modal h2 { color:#023723; font-size:21px; line-height:1.3; margin:4px 0 6px; }
+  .modal .meta { font-size:12px; color:#6b7f75; margin-bottom:14px; }
+  .cols { display:grid; grid-template-columns:340px 1fr; gap:20px; }
+  @media (max-width:760px){ .cols{ grid-template-columns:1fr; } }
+  .preview { width:340px; }
+  .preview .frame { width:340px; height:425px; overflow:hidden; border-radius:12px; border:1px solid #e3e7e3; background:#fff; }
+  .preview iframe { width:1080px; height:1350px; border:none; transform:scale(.3148); transform-origin:top left; }
+  .preview img { width:100%; border-radius:12px; }
+  .cap { white-space:pre-wrap; font-size:14px; line-height:1.55; background:#f8f6f0; border-radius:12px; padding:14px; }
+  .kv { font-size:13px; line-height:1.6; color:#24382f; }
+  .kv b { color:#023723; }
+  .actions { display:flex; gap:10px; margin-top:18px; flex-wrap:wrap; }
+  .note { font-size:12px; color:#6b7f75; margin-top:10px; line-height:1.5; }
+  textarea { width:100%; min-height:220px; font-family:ui-monospace,Menlo,monospace; font-size:12.5px; line-height:1.5; padding:12px; border:1.5px solid #cfd8cf; border-radius:10px; }
+  .cfg { margin-bottom:22px; }
+  .cfg h3 { color:#023723; font-size:16px; margin-bottom:4px; }
+  .cfg p { font-size:12.5px; color:#5a6f60; margin-bottom:8px; line-height:1.5; }
+  .msg { font-size:13px; margin-top:8px; }
+  .ok { color:#2BB51C; } .err { color:#c2410c; }
+  .hidden { display:none; }
+</style></head><body>
+<header>
+  <div class="logo">cartl<span>y</span></div>
+  <h1>Content Console</h1>
+  <div class="sp"></div>
+  <div class="who" id="who"></div>
+  <button class="btn ghost hidden" id="signout">Sign out</button>
+</header>
+<main>
+  <div class="card signin" id="signinCard">
+    <h2>Sign in</h2>
+    <p>Use your Cartly account email. We will send a 6 digit code. Only the owner accounts can open the console.</p>
+    <div id="stepEmail">
+      <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
+      <button class="btn" id="sendCode" style="width:100%">Send my code</button>
+    </div>
+    <div id="stepCode" class="hidden">
+      <input type="text" id="code" placeholder="6 digit code" inputmode="numeric" autocomplete="one-time-code">
+      <button class="btn green" id="verifyCode" style="width:100%">Verify and open the console</button>
+    </div>
+    <div class="msg" id="signinMsg"></div>
+  </div>
+
+  <div id="app" class="hidden">
+    <div class="tabs">
+      <button class="tab on" data-tab="pipeline">Pipeline</button>
+      <button class="tab" data-tab="scripts">Scripts and settings</button>
+      <button class="tab" id="refresh">Refresh</button>
+    </div>
+    <div id="viewPipeline">
+      <div class="board">
+        <div class="col"><h3>DRAFTS · <b id="nDraft">0</b></h3><div id="colDraft"></div></div>
+        <div class="col"><h3>APPROVED · QUEUED · <b id="nApproved">0</b></h3><div id="colApproved"></div></div>
+        <div class="col"><h3>PUBLISHED · <b id="nPublished">0</b></h3><div id="colPublished"></div></div>
+        <div class="col"><h3>REJECTED · <b id="nRejected">0</b></h3><div id="colRejected"></div></div>
+      </div>
+      <p class="note">Approved items publish automatically at the next runner run (Mon, Wed, Fri, Sun at 11:00 AM Toronto) from the Mac, the same pipeline the email approvals use.</p>
+    </div>
+    <div id="viewScripts" class="hidden"></div>
+  </div>
+</main>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <span class="chip" id="mChip"></span>
+    <h2 id="mTitle"></h2>
+    <div class="meta" id="mMeta"></div>
+    <div class="cols">
+      <div class="preview" id="mPreview"></div>
+      <div>
+        <div class="cap" id="mCaption"></div>
+        <div class="kv" id="mDetail" style="margin-top:12px"></div>
+        <div class="actions" id="mActions"></div>
+        <div class="msg" id="mMsg"></div>
+      </div>
+    </div>
+    <div class="actions"><button class="btn grey" id="mClose">Close</button></div>
+  </div>
+</div>
+
+<script type="module">
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+
+const SB_URL = "https://jvgdyermtsvqdttiwjas.supabase.co";
+const SB_KEY = "sb_publishable_4pr8ZZ3DrUH9QQ2hOxt4-g_j_932aru";
+const FN = SB_URL + "/functions/v1/content-console";
+const sb = createClient(SB_URL, SB_KEY);
+let token = null, items = [], current = null;
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+async function api(body) {
+  const r = await fetch(FN, { method: "POST",
+    headers: { "content-type": "application/json", "Authorization": "Bearer " + token },
+    body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || ("HTTP " + r.status));
+  return j;
+}
+
+const KIND_LABEL = { best_price: "Best Price", best_value: "Best Value", education: "Education", reel: "Best Price Reel", campaign: "Campaign" };
+function labelFor(it) {
+  if (it.kind === "reel" && it.payload?.format === "campaign_explainer") return "Campaign Reel";
+  return KIND_LABEL[it.kind] || it.kind;
+}
+function headline(it) {
+  const p = it.payload || {};
+  if ((it.kind === "best_price" || it.kind === "reel") && p.lowest && p.highest) {
+    const base = `$${p.lowest.price} at ${p.lowest.store} vs $${p.highest.price} at ${p.highest.store} (${p.pct_below_highest}% below the highest)`;
+    return it.kind === "reel" ? base + ` · Reel, ${p.voice === "am_puck" ? "male" : "female"} voice` : base;
+  }
+  if (it.kind === "reel" && p.format === "campaign_explainer") return `Cartly launch series explainer · Reel, ${p.voice === "am_puck" ? "male" : "female"} voice`;
+  return p.product_name || p.title || "Content item";
+}
+
+async function load() {
+  const { items: rows } = await api({ action: "list_items" });
+  items = rows;
+  render();
+}
+function colHTML(status) {
+  const list = items.filter((i) => i.status === status);
+  if (!list.length) return `<div class="empty">Nothing here.</div>`;
+  return list.map((it) => `<div class="item" data-id="${it.id}">
+    <div class="chip">${esc(labelFor(it))}</div>
+    <div class="h">${esc(headline(it))}</div>
+    <div class="d">${new Date(it.created_at).toLocaleDateString("en-CA")} · tap to review</div></div>`).join("");
+}
+function render() {
+  for (const [status, colId, nId] of [["draft", "colDraft", "nDraft"], ["approved", "colApproved", "nApproved"], ["published", "colPublished", "nPublished"], ["rejected", "colRejected", "nRejected"]]) {
+    $(colId).innerHTML = colHTML(status);
+    $(nId).textContent = items.filter((i) => i.status === status).length;
+  }
+  document.querySelectorAll(".item").forEach((el) => el.addEventListener("click", () => openItem(el.dataset.id)));
+}
+
+function pointsHTML(points) {
+  return (points || []).map((t, i) => `<div style="display:flex;gap:26px;margin-bottom:40px">
+    <div style="flex:0 0 64px;width:64px;height:64px;border-radius:50%;background:#FD5500;color:#fff;font-size:34px;font-weight:bold;text-align:center;line-height:64px">${i + 1}</div>
+    <div style="font-size:33px;line-height:1.42;color:#24382f;padding-top:8px">${t}</div></div>`).join("");
+}
+function staticPreview(it) {
+  const p = it.payload || {};
+  const base = `font-family:Arial,sans-serif;color:#10231b;`;
+  let body = "";
+  if (it.kind === "campaign") {
+    const stats = p.stats ? `<div style="display:flex;gap:22px">${p.stats.map((s) => `<div style="flex:1;background:#f4efe4;border-radius:18px;padding:26px 10px 22px;text-align:center"><div style="font-size:44px;font-weight:bold;color:#023723">${esc(s.n)}</div><div style="font-size:21px;color:#5a6f60;margin-top:6px;letter-spacing:1px">${esc(s.l)}</div></div>`).join("")}</div>` : "";
+    body = `<div style="background:#023723;padding:44px 56px 36px"><div style="color:#FD5500;font-weight:bold;font-size:30px;letter-spacing:3px">${esc(p.kicker || "")}</div></div>
+      <div style="padding:48px 56px 0;${base}"><div style="font-size:72px;font-weight:bold;line-height:1.15;color:#023723">${esc(p.title || "")}</div>
+      <div style="margin-top:46px">${pointsHTML(p.points)}</div>${stats}
+      <div style="padding-top:34px;font-size:24px;color:#6b7f75;line-height:1.5">${p.footer || ""}</div></div>`;
+  } else if (it.kind === "education") {
+    body = `<div style="background:#023723;padding:44px 56px 36px"><div style="color:#FD5500;font-weight:bold;font-size:30px;letter-spacing:3px">CARTLY EXPLAINS</div></div>
+      <div style="padding:48px 56px 0;${base}"><div style="font-size:72px;font-weight:bold;line-height:1.15;color:#023723">${esc(p.title || "")}</div>
+      <div style="margin-top:46px">${pointsHTML(p.points)}</div></div>`;
+  } else {
+    return `<div class="kv">No static preview for this kind. The details and caption are on the right; the final render happens in the publish pipeline.</div>`;
+  }
+  return `<div class="frame"><iframe srcdoc="${esc(`<html><body style="margin:0;width:1080px;height:1350px;background:#fff">${body}</body></html>`)}"></iframe></div>
+    <div class="note">Live preview rendered from the item payload, same layout the publisher uses.</div>`;
+}
+function detailHTML(it) {
+  const p = it.payload || {};
+  const rows = [];
+  if (p.lowest && p.highest) {
+    rows.push(`<b>Lowest:</b> $${p.lowest.price} at ${esc(p.lowest.store)} (${esc(p.lowest.platform)}, ${esc(p.lowest.obs || "")})`);
+    rows.push(`<b>Highest:</b> $${p.highest.price} at ${esc(p.highest.store)} (${esc(p.highest.platform)}, ${esc(p.highest.obs || "")})`);
+    rows.push(`<b>Difference:</b> $${p.difference} · ${esc(p.pct_below_highest)}% below the highest · ${esc(p.offers_count || (p.offers_used || []).length)} offers`);
+    if (p.observed_label) rows.push(`<b>Observed:</b> ${esc(p.observed_label)}`);
+  }
+  if (p.format === "campaign_explainer" && p.scenes) {
+    rows.push("<b>Scenes and narration:</b>");
+    p.scenes.forEach((s, i) => rows.push(`${i + 1}. ${esc(s.say)}`));
+  }
+  if (it.kind === "reel" && p.ugc) rows.push(`<b>UGC clips:</b> ${esc(p.ugc.hook)} + ${esc(p.ugc.mid)} (presenter speaks no prices; verified by transcription)`);
+  if (it.status === "published") {
+    if (it.permalink) rows.push(`<b>Live:</b> <a href="${esc(it.permalink)}" target="_blank" rel="noopener">${esc(it.permalink)}</a>`);
+    if (it.ig_media_id) rows.push(`<b>Media ID:</b> ${esc(it.ig_media_id)}`);
+  }
+  return rows.join("<br>");
+}
+function actionsHTML(it) {
+  const b = [];
+  if (it.status === "draft") {
+    b.push(`<button class="btn green" data-decide="approved">Approve</button>`);
+    b.push(`<button class="btn red" data-decide="rejected">Reject</button>`);
+  }
+  if (it.status === "approved") b.push(`<button class="btn grey" data-decide="draft">Move back to drafts</button>`);
+  if (it.status === "rejected") b.push(`<button class="btn grey" data-decide="draft">Restore to drafts</button>`);
+  return b.join("");
+}
+function openItem(id) {
+  current = items.find((i) => i.id === id);
+  if (!current) return;
+  $("mChip").textContent = labelFor(current).toUpperCase() + " · " + current.status.toUpperCase();
+  $("mTitle").textContent = headline(current);
+  $("mMeta").textContent = `Created ${new Date(current.created_at).toLocaleString("en-CA")} · template ${current.template || ""} · id ${current.id.slice(0, 8)}`;
+  $("mPreview").innerHTML = (current.asset_urls && current.asset_urls[0])
+    ? `<img src="${esc(current.asset_urls[0])}" alt="Published asset">` : staticPreview(current);
+  $("mCaption").textContent = current.caption || "";
+  $("mDetail").innerHTML = detailHTML(current);
+  $("mActions").innerHTML = actionsHTML(current);
+  $("mMsg").textContent = "";
+  document.querySelectorAll("[data-decide]").forEach((el) => el.addEventListener("click", () => decide(el.dataset.decide)));
+  $("modalBg").style.display = "flex";
+}
+async function decide(decision) {
+  $("mMsg").textContent = "Saving...";
+  try {
+    await api({ action: "decide", id: current.id, decision });
+    current.status = decision;
+    await load();
+    openItem(current.id);
+    $("mMsg").innerHTML = `<span class="ok">Saved. Status: ${decision}.</span>`;
+  } catch (e) { $("mMsg").innerHTML = `<span class="err">${esc(e.message)}</span>`; }
+}
+$("mClose").addEventListener("click", () => { $("modalBg").style.display = "none"; });
+$("modalBg").addEventListener("click", (e) => { if (e.target === $("modalBg")) $("modalBg").style.display = "none"; });
+
+const CFG_HELP = {
+  deck_campaign_launch_v1: "The launch campaign copy deck: every post's kicker, title, points, footer and caption, plus the explainer Reel's scenes. Edits here change what the generator produces next time it runs. JSON array of posts; the last entry may carry the reel scenes.",
+  deck_education_v1: "The education series copy deck: titles, points and captions for the evergreen posts. Same rule: edits apply at the next generation run.",
+  campaign_launch_v1: "Campaign config and the verified claims register for launch_v1 (window, allowed claims, formats).",
+  thresholds: "Generation gates: minimum spread and dollars, freshness window in days. The generator refuses anything outside these.",
+  caps: "Publishing caps, for example posts per day.",
+  reel_voice_female: "Kokoro voice id for the female reel slot (a JSON string).",
+  reel_voice_male: "Kokoro voice id for the male reel slot (a JSON string).",
+  reel_voice_next: "Which voice slot the next price Reel uses: \"female\" or \"male\" (a JSON string).",
+};
+async function loadScripts() {
+  const { config, editable_keys } = await api({ action: "get_config" });
+  $("viewScripts").innerHTML = editable_keys.map((k) => `<div class="card cfg">
+    <h3>${esc(k)}</h3><p>${esc(CFG_HELP[k] || "Editable setting.")}</p>
+    <textarea id="cfg_${esc(k)}">${esc(JSON.stringify(config[k] ?? null, null, 2))}</textarea>
+    <div style="margin-top:10px"><button class="btn dark" data-save="${esc(k)}">Save changes</button>
+    <span class="msg" id="msg_${esc(k)}"></span></div></div>`).join("") +
+    `<p class="note">Generation runs from these decks and settings. Python builder code itself lives in the project repo and is edited there; everything copy-shaped lives here.</p>`;
+  document.querySelectorAll("[data-save]").forEach((el) => el.addEventListener("click", async () => {
+    const k = el.dataset.save, msg = $("msg_" + k);
+    let value;
+    try { value = JSON.parse($("cfg_" + k).value); }
+    catch { msg.innerHTML = `<span class="err">Not valid JSON yet. Fix the text and save again.</span>`; return; }
+    try { await api({ action: "set_config", key: k, value }); msg.innerHTML = `<span class="ok">Saved.</span>`; }
+    catch (e) { msg.innerHTML = `<span class="err">${esc(e.message)}</span>`; }
+  }));
+}
+
+document.querySelectorAll(".tab[data-tab]").forEach((t) => t.addEventListener("click", () => {
+  document.querySelectorAll(".tab[data-tab]").forEach((x) => x.classList.remove("on"));
+  t.classList.add("on");
+  $("viewPipeline").classList.toggle("hidden", t.dataset.tab !== "pipeline");
+  $("viewScripts").classList.toggle("hidden", t.dataset.tab !== "scripts");
+  if (t.dataset.tab === "scripts") loadScripts();
+}));
+$("refresh").addEventListener("click", load);
+
+$("sendCode").addEventListener("click", async () => {
+  const email = $("email").value.trim();
+  $("signinMsg").textContent = "Sending...";
+  const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+  if (error) { $("signinMsg").innerHTML = `<span class="err">${esc(error.message)}</span>`; return; }
+  $("stepEmail").classList.add("hidden"); $("stepCode").classList.remove("hidden");
+  $("signinMsg").innerHTML = `<span class="ok">Code sent to ${esc(email)}. It can take a minute.</span>`;
+});
+$("verifyCode").addEventListener("click", async () => {
+  const email = $("email").value.trim(), code = $("code").value.trim();
+  const { data, error } = await sb.auth.verifyOtp({ email, token: code, type: "email" });
+  if (error) { $("signinMsg").innerHTML = `<span class="err">${esc(error.message)}</span>`; return; }
+  await enter(data.session);
+});
+$("signout").addEventListener("click", async () => { await sb.auth.signOut(); location.reload(); });
+
+async function enter(session) {
+  if (!session) return;
+  token = session.access_token;
+  $("who").textContent = session.user.email;
+  $("signout").classList.remove("hidden");
+  $("signinCard").classList.add("hidden");
+  $("app").classList.remove("hidden");
+  try { await load(); }
+  catch (e) { $("who").textContent = session.user.email + " (not an admin account)"; $("app").innerHTML = `<div class="card">This account is signed in but is not on the console admin list.</div>`; }
+}
+const { data: existing } = await sb.auth.getSession();
+if (existing?.session) enter(existing.session);
+</script>
+</body></html>
