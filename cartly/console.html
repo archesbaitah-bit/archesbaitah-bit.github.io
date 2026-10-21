@@ -69,6 +69,34 @@
   .statsrow { display:grid; grid-template-columns:1fr 2fr 1fr 2fr 1fr 2fr; gap:8px; }
   .claims { font-size:13px; line-height:1.7; color:#24382f; background:#f8f6f0; border-radius:10px; padding:10px 14px; margin-bottom:12px; }
   .preview video { width:100%; border-radius:12px; background:#000; }
+  .badge { display:inline-block; font-size:11px; font-weight:800; letter-spacing:.6px; padding:3px 10px; border-radius:999px; background:#eef3ee; color:#24382f; }
+  .badge.fmt { background:#023723; color:#f4efe4; }
+  .badge.st-draft { background:#dde7de; color:#24382f; }
+  .badge.st-active { background:#2BB51C; color:#fff; }
+  .badge.st-paused { background:#f5a623; color:#fff; }
+  .badge.st-ended { background:#8aa091; color:#fff; }
+  .camp { background:#fff; border-radius:14px; padding:16px 18px; margin-bottom:10px; box-shadow:0 1px 5px rgba(2,55,35,.08); }
+  .camp .top { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .camp .nm { font-size:16px; font-weight:700; color:#10231b; }
+  .camp .meta { font-size:12.5px; color:#6b7f75; margin-top:6px; line-height:1.55; }
+  .camp .acts { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+  .camp .acts .btn { padding:7px 14px; font-size:13px; }
+  .bigcards { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:16px; }
+  @media (max-width:640px){ .bigcards{ grid-template-columns:1fr; } }
+  .bigcard { border:2px solid #cfd8cf; border-radius:14px; padding:18px 14px; text-align:center; cursor:pointer; background:#fff; }
+  .bigcard.on { border-color:#FD5500; background:#fff7f1; }
+  .bigcard .ic { font-size:30px; }
+  .bigcard .t { font-weight:800; color:#023723; margin-top:6px; font-size:15px; }
+  .bigcard .s { font-size:12px; color:#5a6f60; margin-top:4px; line-height:1.45; }
+  .wchip { display:inline-block; padding:8px 14px; border-radius:999px; border:1.5px solid #cfd8cf; background:#fff; font-size:13px; font-weight:700; color:#24382f; margin:0 6px 8px 0; cursor:pointer; }
+  .wchip.on { background:#023723; color:#f4efe4; border-color:#023723; }
+  .wchip.idea { border-color:#FD5500; color:#c2410c; background:#fff7f1; }
+  .wchip.voicesel.on { background:#FD5500; border-color:#FD5500; color:#fff; }
+  .steps { display:flex; gap:6px; margin-bottom:18px; flex-wrap:wrap; }
+  .steps .stp { font-size:12px; font-weight:700; padding:6px 12px; border-radius:999px; background:#eef3ee; color:#5a6f60; }
+  .steps .stp.on { background:#FD5500; color:#fff; }
+  .steps .stp.done { background:#023723; color:#f4efe4; }
+  .switchrow { display:flex; align-items:center; gap:10px; font-size:14px; margin-bottom:12px; }
   .hidden { display:none; }
 </style></head><body>
 <header>
@@ -96,6 +124,7 @@
   <div id="app" class="hidden">
     <div class="tabs">
       <button class="tab on" data-tab="pipeline">Pipeline</button>
+      <button class="tab" data-tab="campaigns">Campaigns</button>
       <button class="tab" data-tab="scripts">Scripts and settings</button>
       <button class="tab" id="refresh">Refresh</button>
     </div>
@@ -109,8 +138,32 @@
       <p class="note">Approved items publish automatically at the next runner run (Mon, Wed, Fri, Sun at 11:00 AM Toronto) from the Mac, the same pipeline the email approvals use.</p>
     </div>
     <div id="viewScripts" class="hidden"></div>
+    <div id="viewCampaigns" class="hidden">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+        <div style="font-size:15px;color:#24382f">Your campaigns. Create as many as you need; each one tells the generator what to make.</div>
+        <div style="flex:1"></div>
+        <button class="btn" id="newCampaign">+ New campaign</button>
+      </div>
+      <div id="campList"><div class="empty">Loading campaigns...</div></div>
+      <p class="note">Campaigns are plans for the content generator. Posts still go through the normal flow: drafts reach you by email or the Pipeline tab, you approve, and the runner posts them.</p>
+    </div>
   </div>
 </main>
+
+<div class="modal-bg" id="wizBg">
+  <div class="modal" style="max-width:640px">
+    <span class="chip" id="wChip">NEW CAMPAIGN</span>
+    <h2 id="wTitle">Create a campaign</h2>
+    <div class="steps" id="wSteps"></div>
+    <div id="wBody"></div>
+    <div class="msg" id="wMsg"></div>
+    <div class="actions">
+      <button class="btn grey" id="wBack">Back</button>
+      <button class="btn" id="wNext">Next</button>
+      <button class="btn grey" id="wCancel">Cancel</button>
+    </div>
+  </div>
+</div>
 
 <div class="modal-bg" id="modalBg">
   <div class="modal">
@@ -411,9 +464,240 @@ document.querySelectorAll(".tab[data-tab]").forEach((t) => t.addEventListener("c
   t.classList.add("on");
   $("viewPipeline").classList.toggle("hidden", t.dataset.tab !== "pipeline");
   $("viewScripts").classList.toggle("hidden", t.dataset.tab !== "scripts");
+  $("viewCampaigns").classList.toggle("hidden", t.dataset.tab !== "campaigns");
   if (t.dataset.tab === "scripts") loadScripts();
+  if (t.dataset.tab === "campaigns") loadCampaigns();
 }));
 $("refresh").addEventListener("click", load);
+
+/* ---------------- Campaigns ---------------- */
+const FMT_LABEL = { photo: "Photo", carousel: "Carousel", reel: "Reel" };
+const VOICE_LABEL = { presenter_female: "Female presenter", presenter_male: "Male presenter" };
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const DAY_SHORT = { 0: "Sun", 1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat" };
+let campaigns = [];
+
+async function loadCampaigns() {
+  try {
+    const { campaigns: rows } = await api({ action: "list_campaigns" });
+    campaigns = rows || [];
+    renderCampaigns();
+  } catch (e) {
+    $("campList").innerHTML = `<div class="empty">We could not load your campaigns (${esc(e.message)}). Tap the Campaigns tab to try again.</div>`;
+  }
+}
+function fmtDate(d) { return d ? new Date(d + "T12:00:00").toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" }) : ""; }
+function renderCampaigns() {
+  if (!campaigns.length) {
+    $("campList").innerHTML = `<div class="empty">No campaigns yet. Tap "+ New campaign" to create your first one.</div>`;
+    return;
+  }
+  $("campList").innerHTML = campaigns.map((c) => {
+    const dates = c.start_date ? `${fmtDate(c.start_date)} to ${c.end_date ? fmtDate(c.end_date) : "no end date"}` : "No dates set";
+    const days = (c.post_days || []).slice().sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map((d) => DAY_SHORT[d]).join(", ");
+    const plats = (c.platforms || []).map((p) => p === "instagram" ? "Instagram" : "TikTok").join(" + ");
+    const pauseBtn = c.status === "active" ? `<button class="btn grey" data-cact="pause" data-id="${c.id}">Pause</button>`
+      : c.status === "paused" ? `<button class="btn green" data-cact="resume" data-id="${c.id}">Resume</button>` : "";
+    const endBtn = (c.status === "active" || c.status === "paused") ? `<button class="btn grey" data-cact="end" data-id="${c.id}">End</button>` : "";
+    return `<div class="camp"><div class="top">
+      <span class="nm">${esc(c.name)}</span>
+      <span class="badge fmt">${esc(FMT_LABEL[c.format] || c.format)}</span>
+      <span class="badge st-${esc(c.status)}">${esc(String(c.status).toUpperCase())}</span></div>
+      <div class="meta">${esc(dates)} · Posts on ${esc(days)} · ${esc(plats)}${c.format === "reel" && c.voice ? " · " + esc(VOICE_LABEL[c.voice] || "") : ""}${c.theme ? "<br>" + esc(c.theme) : ""}</div>
+      <div class="acts"><button class="btn dark" data-cact="edit" data-id="${c.id}">Edit</button>${pauseBtn}${endBtn}
+      <button class="btn red" data-cact="delete" data-id="${c.id}">Delete</button></div></div>`;
+  }).join("");
+  document.querySelectorAll("[data-cact]").forEach((el) => el.addEventListener("click", () => campAction(el.dataset.cact, el.dataset.id)));
+}
+async function campAction(act, id) {
+  const c = campaigns.find((x) => x.id === id);
+  if (!c) return;
+  if (act === "edit") { openWizard(c); return; }
+  if (act === "delete") {
+    if (!confirm(`Delete the campaign "${c.name}"? This cannot be undone.`)) return;
+    try { await api({ action: "delete_campaign", id }); await loadCampaigns(); }
+    catch (e) { alert("Sorry, that delete did not go through: " + e.message); }
+    return;
+  }
+  const status = act === "pause" ? "paused" : act === "resume" ? "active" : "ended";
+  try { await api({ action: "set_campaign_status", id, status }); await loadCampaigns(); }
+  catch (e) { alert("Sorry, that change did not go through: " + e.message); }
+}
+
+/* -------- Campaign wizard (5 steps) -------- */
+const IDEA_CHIPS = [
+  { label: "Weekly price drops", theme: "The biggest grocery price drops in Toronto this week", focus_type: "topic", message: "New lower prices worth knowing about, refreshed every week." },
+  { label: "Store spotlight", theme: "One store in the spotlight: where it wins on price", focus_type: "category", message: "A closer look at one store and the aisles where it beats the others." },
+  { label: "New feature announcement", theme: "A new Cartly feature, explained simply", focus_type: "topic", message: "Something new in Cartly that makes comparing prices easier." },
+  { label: "Seasonal picks", theme: "Seasonal groceries at their best prices right now", focus_type: "category", message: "What is in season, and where it costs the least this week." },
+];
+let W = null;
+function wizSteps(format) {
+  const s = [{ k: "format", label: "1 · Format" }, { k: "content", label: "2 · Content" }];
+  if (format === "reel") s.push({ k: "voice", label: "3 · Voice" });
+  s.push({ k: "schedule", label: format === "reel" ? "4 · Schedule" : "3 · Schedule" });
+  s.push({ k: "review", label: format === "reel" ? "5 · Review" : "4 · Review" });
+  return s;
+}
+function blankWiz() {
+  return { id: null, step: 0, format: null, name: "", theme: "", focus_type: "topic", focus_value: "",
+    key_message: "", voice: "presenter_female", start_date: new Date().toISOString().slice(0, 10),
+    end_date: "", noEnd: true, post_days: [1, 3, 5, 0], platforms: ["instagram", "tiktok"], status: "draft" };
+}
+function openWizard(existing) {
+  W = blankWiz();
+  if (existing) {
+    Object.assign(W, { id: existing.id, format: existing.format, name: existing.name || "",
+      theme: existing.theme || "", focus_type: existing.focus_type || "topic",
+      focus_value: existing.focus_value || "", key_message: existing.key_message || "",
+      voice: existing.voice || "presenter_female", start_date: existing.start_date || W.start_date,
+      end_date: existing.end_date || "", noEnd: !existing.end_date,
+      post_days: (existing.post_days || [1, 3, 5, 0]).slice(), platforms: (existing.platforms || ["instagram", "tiktok"]).slice(),
+      status: existing.status || "draft" });
+    W.step = 1;
+  }
+  $("wChip").textContent = existing ? "EDIT CAMPAIGN" : "NEW CAMPAIGN";
+  $("wTitle").textContent = existing ? "Edit campaign" : "Create a campaign";
+  $("wizBg").style.display = "flex";
+  renderWiz();
+}
+function closeWizard() { $("wizBg").style.display = "none"; W = null; }
+function wizErr(t) { $("wMsg").innerHTML = t ? `<span class="err">${esc(t)}</span>` : ""; }
+function gatherWiz() {
+  const g = (id) => $(id) ? $(id).value.trim() : null;
+  const stepKey = wizSteps(W.format)[W.step].k;
+  if (stepKey === "content") {
+    W.name = g("wz_name"); W.theme = g("wz_theme"); W.key_message = g("wz_msg");
+    W.focus_type = $("wz_ftype") ? $("wz_ftype").value : W.focus_type;
+    W.focus_value = g("wz_fvalue");
+  }
+  if (stepKey === "schedule") {
+    W.start_date = $("wz_start") ? $("wz_start").value : W.start_date;
+    W.noEnd = $("wz_noend") ? $("wz_noend").checked : W.noEnd;
+    W.end_date = W.noEnd ? "" : ($("wz_end") ? $("wz_end").value : "");
+  }
+}
+function validateStep() {
+  const stepKey = wizSteps(W.format)[W.step].k;
+  gatherWiz();
+  if (stepKey === "format" && !W.format) return "Please pick a format: a single photo, a carousel, or a reel.";
+  if (stepKey === "content") {
+    if (!W.name) return "Please give your campaign a name, so you can find it later.";
+    if (!W.theme) return "Please add a theme: one line on what this campaign is about.";
+  }
+  if (stepKey === "schedule") {
+    if (!W.start_date) return "Please pick a start date.";
+    if (!W.noEnd && !W.end_date) return "Please pick an end date, or switch on \u201CNo end date\u201D.";
+    if (!W.noEnd && W.end_date < W.start_date) return "The end date is before the start date. Please fix one of them.";
+    if (!W.post_days.length) return "Please pick at least one posting day.";
+    if (!W.platforms.length) return "Please pick at least one place to post: Instagram, TikTok, or both.";
+  }
+  return "";
+}
+function renderWiz() {
+  const steps = wizSteps(W.format);
+  const stepKey = steps[W.step].k;
+  $("wSteps").innerHTML = steps.map((s, i) => `<span class="stp${i === W.step ? " on" : i < W.step ? " done" : ""}">${esc(s.label)}</span>`).join("");
+  let h = "";
+  if (stepKey === "format") {
+    h = `<p class="note" style="margin:0 0 14px">What kind of posts should this campaign make? You can change your mind later by editing the campaign.</p>
+    <div class="bigcards">
+      <div class="bigcard${W.format === "photo" ? " on" : ""}" data-fmt="photo"><div class="ic">&#128247;</div><div class="t">Photo</div><div class="s">One strong picture post.</div></div>
+      <div class="bigcard${W.format === "carousel" ? " on" : ""}" data-fmt="carousel"><div class="ic">&#127902;</div><div class="t">Carousel</div><div class="s">A collection of photos people swipe through.</div></div>
+      <div class="bigcard${W.format === "reel" ? " on" : ""}" data-fmt="reel"><div class="ic">&#127916;</div><div class="t">Reel</div><div class="s">A short video with a presenter.</div></div>
+    </div>`;
+  } else if (stepKey === "content") {
+    h = fld("Campaign name", txt("wz_name", W.name));
+    h += `<div class="fld"><label>Start from an idea (optional)</label><div>` +
+      IDEA_CHIPS.map((c, i) => `<span class="wchip idea" data-idea="${i}">${esc(c.label)}</span>`).join("") + `</div>
+      <p class="note" style="margin:2px 0 0">Tap an idea to fill in the theme and message. You can edit everything after.</p></div>`;
+    h += fld("Theme: what is this campaign about?", txt("wz_theme", W.theme));
+    h += fld("Focus", sel("wz_ftype", W.focus_type, [["product", "A product"], ["category", "A category or aisle"], ["topic", "A topic"]]));
+    h += fld("Focus detail (a product name, an aisle, or a topic)", txt("wz_fvalue", W.focus_value));
+    h += fld("Key message: the one thing viewers should remember", area("wz_msg", W.key_message, 3));
+  } else if (stepKey === "voice") {
+    h = `<p class="note" style="margin:0 0 14px">Reels are presented by one of Cartly's two presenters. Pick who presents this campaign.</p>
+    <div class="bigcards" style="grid-template-columns:1fr 1fr">
+      <div class="bigcard${W.voice === "presenter_female" ? " on" : ""}" data-voice="presenter_female"><div class="ic">&#128105;</div><div class="t">Female presenter</div><div class="s">Mid 30s, ponytail, green apron.</div></div>
+      <div class="bigcard${W.voice === "presenter_male" ? " on" : ""}" data-voice="presenter_male"><div class="ic">&#128104;</div><div class="t">Male presenter</div><div class="s">Mid 30s, light stubble, green apron.</div></div>
+    </div>`;
+  } else if (stepKey === "schedule") {
+    h = fld("Starts on", `<input type="date" id="wz_start" value="${esc(W.start_date)}">`);
+    h += `<div class="switchrow"><input type="checkbox" id="wz_noend"${W.noEnd ? " checked" : ""} style="width:18px;height:18px"> <label for="wz_noend">No end date (runs until you pause or end it)</label></div>`;
+    h += `<div id="wz_endwrap"${W.noEnd ? ' class="hidden"' : ""}>` + fld("Ends on", `<input type="date" id="wz_end" value="${esc(W.end_date)}">`) + `</div>`;
+    h += `<div class="fld"><label>Posting days</label><div>` +
+      [1, 2, 3, 4, 5, 6, 0].map((d) => `<span class="wchip${W.post_days.includes(d) ? " on" : ""}" data-day="${d}">${DAY_NAMES[d]}</span>`).join("") + `</div>
+      <p class="note" style="margin:2px 0 0">Posts go out on the runner days: Mon, Wed, Fri, Sun.</p></div>`;
+    h += `<div class="fld"><label>Post to</label><div>
+      <span class="wchip${W.platforms.includes("instagram") ? " on" : ""}" data-plat="instagram">Instagram</span>
+      <span class="wchip${W.platforms.includes("tiktok") ? " on" : ""}" data-plat="tiktok">TikTok</span></div></div>`;
+  } else if (stepKey === "review") {
+    const days = W.post_days.slice().sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map((d) => DAY_NAMES[d]).join(", ");
+    const plats = W.platforms.map((p) => p === "instagram" ? "Instagram" : "TikTok").join(" and ");
+    h = `<div class="claims" style="font-size:14.5px;line-height:1.65">
+      You are ${W.id ? "editing" : "creating"} <b>${esc(W.name)}</b>, a <b>${esc(FMT_LABEL[W.format])}</b> campaign about <b>${esc(W.focus_value || W.theme)}</b>.
+      <br>Theme: ${esc(W.theme)}${W.key_message ? `<br>The one thing viewers should remember: \u201C${esc(W.key_message)}\u201D` : ""}
+      ${W.format === "reel" ? `<br>Presented by the <b>${esc(VOICE_LABEL[W.voice])}</b>.` : ""}
+      <br>It starts <b>${esc(fmtDate(W.start_date))}</b>${W.noEnd ? " and runs with no end date" : ` and ends <b>${esc(fmtDate(W.end_date))}</b>`}, posting on <b>${esc(days)}</b> to <b>${esc(plats)}</b>.
+      <br>It will be saved as a <b>draft</b>; set it to active from the campaign list when you are ready.</div>
+      <p class="note">Nothing posts automatically from a campaign on its own: generated posts still come to you for approval first, exactly like everything else in this console.</p>`;
+  }
+  $("wBody").innerHTML = h;
+  wizErr("");
+  $("wBack").style.visibility = W.step === 0 ? "hidden" : "visible";
+  $("wNext").textContent = stepKey === "review" ? (W.id ? "Save changes" : "Create campaign") : "Next";
+  document.querySelectorAll("[data-fmt]").forEach((el) => el.addEventListener("click", () => {
+    W.format = el.dataset.fmt;
+    if (W.format !== "reel") W.voice = W.voice || "presenter_female";
+    renderWiz();
+  }));
+  document.querySelectorAll("[data-voice]").forEach((el) => el.addEventListener("click", () => { W.voice = el.dataset.voice; renderWiz(); }));
+  document.querySelectorAll("[data-idea]").forEach((el) => el.addEventListener("click", () => {
+    gatherWiz();
+    const chip = IDEA_CHIPS[Number(el.dataset.idea)];
+    W.theme = chip.theme; W.focus_type = chip.focus_type; W.key_message = chip.message;
+    if (!W.name) W.name = chip.label;
+    renderWiz();
+  }));
+  document.querySelectorAll("[data-day]").forEach((el) => el.addEventListener("click", () => {
+    const d = Number(el.dataset.day);
+    W.post_days = W.post_days.includes(d) ? W.post_days.filter((x) => x !== d) : W.post_days.concat(d);
+    el.classList.toggle("on");
+  }));
+  document.querySelectorAll("[data-plat]").forEach((el) => el.addEventListener("click", () => {
+    const p = el.dataset.plat;
+    W.platforms = W.platforms.includes(p) ? W.platforms.filter((x) => x !== p) : W.platforms.concat(p);
+    el.classList.toggle("on");
+  }));
+  const ne = $("wz_noend");
+  if (ne) ne.addEventListener("change", () => { $("wz_endwrap").classList.toggle("hidden", ne.checked); });
+}
+$("wBack").addEventListener("click", () => { gatherWiz(); if (W.step > 0) { W.step--; renderWiz(); } });
+$("wCancel").addEventListener("click", closeWizard);
+$("wizBg").addEventListener("click", (e) => { if (e.target === $("wizBg")) closeWizard(); });
+$("wNext").addEventListener("click", async () => {
+  const steps = wizSteps(W.format);
+  const stepKey = steps[W.step].k;
+  const err = validateStep();
+  if (err) { wizErr(err); return; }
+  if (stepKey !== "review") { W.step++; renderWiz(); return; }
+  gatherWiz();
+  const campaign = { name: W.name, format: W.format, theme: W.theme || null,
+    focus_type: W.focus_type || null, focus_value: W.focus_value || null,
+    key_message: W.key_message || null, voice: W.format === "reel" ? W.voice : null,
+    start_date: W.start_date || null, end_date: W.noEnd ? null : (W.end_date || null),
+    post_days: W.post_days, platforms: W.platforms, status: W.id ? W.status : "draft", config: {} };
+  $("wNext").disabled = true;
+  try {
+    if (W.id) await api({ action: "update_campaign", id: W.id, campaign });
+    else await api({ action: "create_campaign", campaign });
+    closeWizard();
+    await loadCampaigns();
+  } catch (e) {
+    wizErr("Sorry, the campaign could not be saved: " + e.message);
+  } finally { $("wNext").disabled = false; }
+});
+$("newCampaign").addEventListener("click", () => openWizard(null));
 
 $("sendCode").addEventListener("click", async () => {
   const email = $("email").value.trim();
